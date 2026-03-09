@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app-shell">
+  <div class="app-top">
+    <div><b>Giro Beer</b><span>app de pedidos</span></div>
+    <button class="gold-btn" id="open-cart">Carrinho</button>
+  </div>
+
+  <div class="app-hero">
+    <div class="app-hero-copy">
+      <span class="pill green">Pix online</span>
+      <h1>Peça sem sair do app</h1>
+      <p>Visual pensado para o cliente comprar rápido no celular.</p>
+    </div>
+  </div>
+
+  {% if branches %}
+  <div class="branch-area">
+    <div class="branch-title">Escolha sua filial</div>
+    <div class="branch-grid">
+      <button class="branch-btn active" data-branch="all" data-branch-name="todas as filiais">
+        <div class="branch-emoji">🏪</div>
+        <b>Todas</b>
+        <span>ver tudo</span>
+      </button>
+
+      {% for b in branches %}
+      <button class="branch-btn" data-branch="{{ b.id }}" data-branch-name="{{ b.name }}">
+        <div class="branch-emoji">📍</div>
+        <b>{{ b.name }}</b>
+        <span>{{ b.city }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="category-strip-wrap">
+    <div class="category-strip" id="category-strip">
+      <button class="category-btn active" data-category="all">Todas</button>
+      <button class="category-btn" data-category="Cervejas">Cervejas</button>
+      <button class="category-btn" data-category="Combos">Combos</button>
+      <button class="category-btn" data-category="Refrigerantes">Refrigerantes</button>
+      <button class="category-btn" data-category="Energeticos">Energéticos</button>
+      <button class="category-btn" data-category="Petiscos">Petiscos</button>
+      <button class="category-btn" data-category="Destilados">Destilados</button>
+      <button class="category-btn" data-category="Vinhos">Vinhos</button>
+      <button class="category-btn" data-category="Sem Álcool">Sem Álcool</button>
+      <button class="category-btn" data-category="Outros">Outros</button>
+    </div>
+  </div>
+
+  <div class="section-head mobile-head">
+    <h3 id="products-title">Produtos</h3>
+    <span id="branch-label">todas as filiais</span>
+  </div>
+
+  <div class="category-sections">
+    {% set category_order = ['Cervejas', 'Combos', 'Refrigerantes', 'Energeticos', 'Petiscos', 'Destilados', 'Vinhos', 'Sem Álcool', 'Outros'] %}
+
+    {% for cat in category_order %}
+      {% set cat_products = products | selectattr('category', 'equalto', cat) | list %}
+      {% if cat_products %}
+      <section class="product-section" data-category-section="{{ cat }}">
+        <div class="product-section-head">
+          <h4>
+            {% if cat == 'Energeticos' %}Energéticos{% else %}{{ cat }}{% endif %}
+          </h4>
+        </div>
+
+        <div class="app-products">
+          {% for p in cat_products %}
+          <article class="product-card"
+                   data-branch="{{ p.branch_id or 'none' }}"
+                   data-category="{{ p.category }}">
+            <div class="thumb" style="background-image:url('{{ p.image }}')">
+              <div class="stock {{ 'ok' if p.stock > 5 else 'low' }}">
+                {{ 'Em estoque' if p.stock > 5 else 'Últimas %s' % p.stock }}
+              </div>
+            </div>
+            <div class="content">
+              <b>{{ p.name }}</b>
+              <span>
+                {% if p.volume_ml %}{{ p.volume_ml }} ML • {% endif %}{{ p.tag }}
+              </span>
+              <div class="price-row">
+                <strong>R$ {{ '%.2f'|format(p.price) }}</strong>
+                <button class="mini-btn add-item"
+                        data-name="{{ p.name }}"
+                        data-price="{{ '%.2f'|format(p.price) }}">
+                  +
+                </button>
+              </div>
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <div class="bottom-bar">
+    <div>
+      <strong id="cart-total-label">0 itens • R$ 0,00</strong>
+      <span>pronto para pagamento</span>
+    </div>
+    <button class="green-btn" id="checkout-btn">Pagar Pix</button>
+  </div>
+</div>
+
+<div class="modal" id="checkout-modal">
+  <div class="modal-box">
+    <h3>Confirmar Pedido</h3>
+    <form id="checkout-form" style="display:grid;gap:12px;margin-top:8px">
+      <input type="hidden" id="selected-branch-id" value="">
+      <div id="selected-branch-label" style="font-size:12px;color:var(--muted)"></div>
+      <input type="text" id="customer-name" placeholder="Seu nome"
+        style="width:100%;padding:12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+      <div id="cart-summary" style="font-size:13px;color:var(--muted);display:grid;gap:4px"></div>
+      <div class="cta-row">
+        <button type="submit" class="btn primary">Gerar Pix</button>
+        <button type="button" class="btn" onclick="document.getElementById('checkout-modal').classList.remove('open')">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="pix-modal">
+  <div class="modal-box">
+    <div class="row">
+      <h3>Pagamento Pix</h3>
+      <button class="btn" id="close-pix">Fechar</button>
+    </div>
+    <p class="small" id="pix-order-label">Pedido #—</p>
+    <div class="qr"></div>
+    <input class="copy-input" id="pix-code" value="" readonly />
+    <div class="cta-row" style="margin-top:12px">
+      <button class="btn primary" id="copy-pix-btn">Copiar código</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const checkoutModal = document.getElementById('checkout-modal');
+  if (checkoutModal) {
+    const observer = new MutationObserver(() => {
+      if (checkoutModal.classList.contains('open')) {
+        const summary = document.getElementById('cart-summary');
+        if (summary && typeof cart !== 'undefined') {
+          summary.innerHTML = cart.map(i =>
+            `<div>${i.name} × ${i.qty} — R$ ${(i.price * i.qty).toFixed(2).replace('.', ',')}</div>`
+          ).join('') || '<div>Nenhum item</div>';
+        }
+      }
+    });
+    observer.observe(checkoutModal, { attributes: true, attributeFilter: ['class'] });
+  }
+});
+</script>
+{% endblock %}

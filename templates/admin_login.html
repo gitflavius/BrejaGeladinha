@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="min-height:100vh;display:grid;place-items:center;padding:20px">
+  <div class="panel" style="max-width:420px;width:100%">
+    <div style="text-align:center;margin-bottom:24px">
+      <div class="logo" style="margin:0 auto 16px;width:60px;height:60px;font-size:24px">GB</div>
+      <h2 style="margin:0 0 8px">Login Admin</h2>
+      <p class="small">Acesse o painel administrativo</p>
+    </div>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div style="margin-bottom:12px;padding:10px 14px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:10px;color:#f87171;font-size:13px">
+          {{ messages[0] }}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form method="POST">
+      <input type="text" name="username" placeholder="Usuário" required style="width:100%;padding:12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);margin:6px 0">
+      <input type="password" name="password" placeholder="Senha" required style="width:100%;padding:12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);margin:6px 0">
+      <button type="submit" class="btn primary" style="width:100%;margin-top:10px">Entrar</button>
+    </form>
+    <div style="margin-top:20px;padding:14px;background:rgba(245,185,56,.1);border-radius:12px;border:1px solid rgba(245,185,56,.2)">
+      <small><strong>👤 Credenciais padrão:</strong><br>Usuário: <code>admin</code><br>Senha: <code>girobeer123</code></small>
+    </div>
+  </div>
+</div>
+{% endblock %}

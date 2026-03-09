@@ -1,0 +1,9 @@
+services:
+  girobeer:
+    build: .
+    container_name: girobeer_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./girobeer.db:/app/girobeer.db
+    restart: unless-stopped

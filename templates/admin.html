@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-wrap">
+    <header class="topbar">
+        <div class="container nav">
+            <div class="brand">
+                <div class="logo">GB</div>
+                <div><b>Giro Beer • Gestão</b><span>banco SQLite + CRUD completo</span></div>
+            </div>
+            <div class="nav-links">
+                <a href="/">Site</a>
+                <a href="/app">App</a>
+                <a href="/admin/logout" class="btn">Sair</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container admin-grid">
+        <section class="panel">
+            <h2>Painel administrativo ✅</h2>
+            <p>Banco de dados SQLite com CRUD completo.</p>
+
+            {% if selected_branch %}
+            <div style="margin:10px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.03);font-size:13px">
+                <b style="color:var(--gold)">Filial ativa:</b> {{ selected_branch.name }} • {{ selected_branch.city }}
+                <a href="/admin" class="btn" style="margin-left:10px;padding:5px 10px;font-size:11px">Ver todas</a>
+            </div>
+            {% endif %}
+
+            <div class="metrics">
+                <div class="metric"><b>{{ products|length }}</b><span>produtos</span></div>
+                <div class="metric"><b>{{ orders|length }}</b><span>pedidos</span></div>
+                <div class="metric"><b>{{ total_stock }}</b><span>estoque total</span></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-head">
+                <h3>Produtos</h3>
+                <button class="mini-btn" onclick="document.getElementById('add-modal').style.display='grid'">+ Adicionar</button>
+            </div>
+            <div class="table">
+                <div class="tr head" style="grid-template-columns:1.1fr 1fr 90px 1fr 1fr 1fr">
+                    <div>Produto</div>
+                    <div>Categoria</div>
+                    <div>ML</div>
+                    <div>Filial</div>
+                    <div>Estoque</div>
+                    <div>Ações</div>
+                </div>
+
+                {% for p in products %}
+                <div class="tr" style="grid-template-columns:1.1fr 1fr 90px 1fr 1fr 1fr">
+                    <div>{{ p.name }}</div>
+                    <div>{{ p.category }}</div>
+                    <div>{{ p.volume_ml if p.volume_ml else '—' }}</div>
+                    <div style="font-size:11px;color:var(--muted)">
+                        {% set br = branches | selectattr('id','eq', p.branch_id) | first if p.branch_id else None %}
+                        {{ br.name if br else '—' }}
+                    </div>
+                    <div>
+                        <form method="POST" action="/admin/products/{{ p.id }}/stock{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:inline-flex;gap:4px">
+                            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+                            <input type="number" name="quantity" value="{{ p.stock }}" style="width:60px;padding:4px;margin:0">
+                            <button type="submit" class="mini-btn" style="padding:4px 8px">✓</button>
+                        </form>
+                    </div>
+                    <div style="display:flex;gap:4px">
+                        <button class="btn" style="padding:6px 10px;font-size:11px"
+                            onclick="editProduct({{ p.id }},'{{ p.name|escape }}','{{ p.category|escape }}',{{ p.volume_ml or 0 }},{{ p.price }},{{ p.stock }},'{{ p.tag|escape }}','{{ p.image|escape }}',{{ p.branch_id or 'null' }})">
+                            Editar
+                        </button>
+                        <form method="POST" action="/admin/products/{{ p.id }}/delete{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:inline">
+                            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+                            <button type="submit" class="btn" style="padding:6px 10px;font-size:11px;background:rgba(239,68,68,.2)"
+                                onclick="return confirm('Deletar {{ p.name|escape }}?')">🗑</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-head">
+                <h3>Pedidos</h3>
+                <button class="mini-btn" onclick="document.getElementById('add-order-modal').style.display='grid'">+ Novo</button>
+            </div>
+            <div class="table">
+                <div class="tr head" style="grid-template-columns:60px 1fr 1fr 90px 80px">
+                    <div>#ID</div>
+                    <div>Cliente</div>
+                    <div>Status</div>
+                    <div>Total</div>
+                    <div>Ações</div>
+                </div>
+                {% for o in orders %}
+                <div class="tr" style="grid-template-columns:60px 1fr 1fr 90px 80px">
+                    <div style="cursor:pointer;color:var(--gold)" onclick="toggleItems('items-{{ o.id }}')">#{{ o.id }}</div>
+                    <div>
+                        {{ o.customer }}<br>
+                        <small style="color:var(--muted);font-size:10px">
+                            {{ o.created_at }} • {{ o.items|length }} itens
+                        </small>
+                    </div>
+                    <div>
+                        <form method="POST" action="/admin/orders/{{ o.id }}/status{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:inline-flex;gap:4px">
+                            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+                            <select name="status" style="padding:4px;margin:0;font-size:11px;background:#1a1e28;border:1px solid var(--line);color:var(--text);border-radius:6px">
+                                <option value="Novo" {% if o.status=='Novo' %}selected{% endif %}>Novo</option>
+                                <option value="Preparando" {% if o.status=='Preparando' %}selected{% endif %}>Preparando</option>
+                                <option value="Saiu para entrega" {% if o.status=='Saiu para entrega' %}selected{% endif %}>Saiu</option>
+                                <option value="Entregue" {% if o.status=='Entregue' %}selected{% endif %}>Entregue</option>
+                                <option value="Cancelado" {% if o.status=='Cancelado' %}selected{% endif %}>Cancelado</option>
+                            </select>
+                            <button type="submit" class="mini-btn" style="padding:4px 8px">✓</button>
+                        </form>
+                    </div>
+                    <div>R$ {{ '%.2f'|format(o.total) }}</div>
+                    <div>
+                        <form method="POST" action="/admin/orders/{{ o.id }}/delete{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:inline">
+                            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+                            <button type="submit" class="btn" style="padding:6px 10px;font-size:11px;background:rgba(239,68,68,.2)"
+                                onclick="return confirm('Deletar pedido #{{ o.id }}?')">🗑</button>
+                        </form>
+                    </div>
+                </div>
+                <div id="items-{{ o.id }}" style="display:none;padding:8px 12px 10px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line)">
+                    {% if o.items %}
+                        {% for item in o.items %}
+                        <div style="font-size:12px;padding:3px 0;color:var(--muted)">
+                            {{ item.product_name }} × {{ item.quantity }}
+                            <span style="color:var(--text)">— R$ {{ '%.2f'|format(item.unit_price * item.quantity) }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <span style="font-size:12px;opacity:.4">Sem itens registrados</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="section-head">
+                <h3>Filiais</h3>
+                <button class="mini-btn" onclick="document.getElementById('add-branch-modal').style.display='grid'">+ Adicionar</button>
+            </div>
+            <div class="cards-2">
+                <div class="mini-panel"
+                     onclick="window.location.href='/admin'"
+                     style="display:flex;flex-direction:column;gap:8px;cursor:pointer;{% if not selected_branch_id %}outline:1px solid var(--gold);box-shadow:0 0 0 1px rgba(255,215,0,.15) inset;{% endif %}">
+                    <b>Todas as filiais</b>
+                    <span class="small">Visão geral</span>
+                </div>
+
+                {% for b in branches %}
+                <div class="mini-panel"
+                     onclick="window.location.href='/admin?branch_id={{ b.id }}'"
+                     style="display:flex;flex-direction:column;gap:8px;cursor:pointer;{% if selected_branch_id == b.id %}outline:1px solid var(--gold);box-shadow:0 0 0 1px rgba(255,215,0,.15) inset;{% endif %}">
+                    <b>{{ b.name }}</b>
+                    <span class="small">{{ b.city }} • {{ b.status }}</span>
+                    <div style="display:flex;gap:6px;margin-top:4px">
+                        <button class="btn" style="padding:5px 10px;font-size:11px"
+                            onclick="event.stopPropagation(); editBranch({{ b.id }},'{{ b.name|escape }}','{{ b.city|escape }}','{{ b.status|escape }}')">Editar</button>
+                        <form method="POST" action="/admin/branches/{{ b.id }}/delete{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:inline" onclick="event.stopPropagation()">
+                            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+                            <button type="submit" class="btn" style="padding:5px 10px;font-size:11px;background:rgba(239,68,68,.2)"
+                                onclick="event.stopPropagation(); return confirm('Deletar {{ b.name|escape }}?')">🗑</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="modal" id="add-modal">
+    <div class="modal-box">
+        <h3>Adicionar Produto</h3>
+        <form method="POST" action="/admin/products/add{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" enctype="multipart/form-data" style="display:grid;gap:10px">
+            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+
+            <input type="text" name="name" placeholder="Nome do produto" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <select name="category" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="">Selecione a categoria...</option>
+                <option value="Cervejas">Cervejas</option>
+                <option value="Combos">Combos</option>
+                <option value="Energeticos">Energeticos</option>
+                <option value="Destilados">Destilados</option>
+                <option value="Vinhos">Vinhos</option>
+                <option value="Petiscos">Petiscos</option>
+                <option value="Sem Álcool">Sem Álcool</option>
+                <option value="Outros">Outros</option>
+            </select>
+
+            <input type="number" name="volume_ml" placeholder="Volume em ML (ex: 250, 500, 1000)" min="0"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="number" step="0.01" name="price" placeholder="Preço (R$)" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="number" name="stock" placeholder="Estoque" value="0"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="text" name="tag" placeholder="Tag (premium, economia...)"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <select name="branch_id" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="">Todas as filiais</option>
+                {% for b in branches %}
+                <option value="{{ b.id }}" {% if selected_branch_id == b.id %}selected{% endif %}>📍 {{ b.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label style="font-size:12px;color:var(--text);opacity:.7">Foto do produto</label>
+            <input type="file" name="image" accept="image/*"
+                style="width:100%;padding:8px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <div class="cta-row">
+                <button type="submit" class="btn primary">Salvar</button>
+                <button type="button" class="btn" onclick="document.getElementById('add-modal').style.display='none'">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="edit-modal">
+    <div class="modal-box">
+        <h3>Editar Produto</h3>
+        <form method="POST" id="edit-form" enctype="multipart/form-data" style="display:grid;gap:10px">
+            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+
+            <input type="text" name="name" id="edit-name" placeholder="Nome" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <select name="category" id="edit-category" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="">Selecione a categoria...</option>
+                <option value="Cervejas">Cervejas</option>
+                <option value="Combos">Combos</option>
+                <option value="Energeticos">Energeticos</option>
+                <option value="Destilados">Destilados</option>
+                <option value="Vinhos">Vinhos</option>
+                <option value="Petiscos">Petiscos</option>
+                <option value="Sem Álcool">Sem Álcool</option>
+                <option value="Outros">Outros</option>
+            </select>
+
+            <input type="number" name="volume_ml" id="edit-volume-ml" placeholder="Volume em ML"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="number" step="0.01" name="price" id="edit-price" placeholder="Preço (R$)" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="number" name="stock" id="edit-stock" placeholder="Estoque"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="text" name="tag" id="edit-tag" placeholder="Tag"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <div id="edit-img-preview" style="display:none;align-items:center;gap:8px">
+                <img id="edit-img-thumb" src="" style="height:48px;border-radius:8px;object-fit:cover">
+                <span style="font-size:11px;opacity:.6">imagem atual</span>
+            </div>
+
+            <select name="branch_id" id="edit-branch" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="">Todas as filiais</option>
+                {% for b in branches %}
+                <option value="{{ b.id }}">📍 {{ b.name }}</option>
+                {% endfor %}
+            </select>
+
+            <label style="font-size:12px;color:var(--text);opacity:.7">Nova foto (vazio = mantém atual)</label>
+            <input type="file" name="image" accept="image/*"
+                style="width:100%;padding:8px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <div class="cta-row">
+                <button type="submit" class="btn primary">Atualizar</button>
+                <button type="button" class="btn" onclick="document.getElementById('edit-modal').style.display='none'">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="add-order-modal">
+    <div class="modal-box" style="max-width:520px">
+        <h3>Novo Pedido</h3>
+        <form method="POST" action="/admin/orders/add{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" id="order-form" style="display:grid;gap:10px">
+            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+
+            <input type="text" name="customer" placeholder="Nome do cliente" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <div style="font-size:12px;opacity:.7;margin-bottom:-4px">Itens do pedido</div>
+            <div id="order-items-list" style="display:grid;gap:6px"></div>
+
+            <button type="button" onclick="addOrderItem()" class="btn" style="font-size:12px;padding:8px">+ Adicionar item</button>
+
+            <div style="text-align:right;font-size:14px;padding:4px 0">
+                Total: <strong id="order-total-display">R$ 0,00</strong>
+            </div>
+
+            <div class="cta-row">
+                <button type="submit" class="btn primary">Criar Pedido</button>
+                <button type="button" class="btn" onclick="document.getElementById('add-order-modal').style.display='none'">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="add-branch-modal">
+    <div class="modal-box">
+        <h3>Nova Filial</h3>
+        <form method="POST" action="/admin/branches/add{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}" style="display:grid;gap:10px">
+            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+
+            <input type="text" name="name" placeholder="Nome da filial" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="text" name="city" placeholder="Cidade/UF"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <select name="status" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="Ativa">Ativa</option>
+                <option value="Expansão">Expansão</option>
+                <option value="Inativa">Inativa</option>
+            </select>
+
+            <div class="cta-row">
+                <button type="submit" class="btn primary">Salvar</button>
+                <button type="button" class="btn" onclick="document.getElementById('add-branch-modal').style.display='none'">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="edit-branch-modal">
+    <div class="modal-box">
+        <h3>Editar Filial</h3>
+        <form method="POST" id="edit-branch-form" style="display:grid;gap:10px">
+            <input type="hidden" name="branch_id_context" value="{{ selected_branch_id or '' }}">
+
+            <input type="text" name="name" id="eb-name" placeholder="Nome" required
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <input type="text" name="city" id="eb-city" placeholder="Cidade/UF"
+                style="width:100%;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)">
+
+            <select name="status" id="eb-status" style="width:100%;padding:10px;border-radius:10px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text)">
+                <option value="Ativa">Ativa</option>
+                <option value="Expansão">Expansão</option>
+                <option value="Inativa">Inativa</option>
+            </select>
+
+            <div class="cta-row">
+                <button type="submit" class="btn primary">Atualizar</button>
+                <button type="button" class="btn" onclick="document.getElementById('edit-branch-modal').style.display='none'">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script id="products-json" type="application/json">
+{{ products | map(attribute='name') | list | tojson }}
+</script>
+
+<script id="products-prices-json" type="application/json">
+{{ products | map(attribute='price') | list | tojson }}
+</script>
+
+<script>
+const _pnames = JSON.parse(document.getElementById('products-json').textContent);
+const _pprices = JSON.parse(document.getElementById('products-prices-json').textContent);
+const PRODUCTS_DATA = _pnames.map((n, i) => ({ name: n, price: _pprices[i] }));
+
+function editProduct(id, name, category, volumeMl, price, stock, tag, image, branchId) {
+    const form = document.getElementById('edit-form');
+    form.action = '/admin/products/' + id + '/edit{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}';
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-category').value = category;
+    document.getElementById('edit-volume-ml').value = volumeMl || '';
+    document.getElementById('edit-price').value = price;
+    document.getElementById('edit-stock').value = stock;
+    document.getElementById('edit-tag').value = tag;
+    document.getElementById('edit-branch').value = branchId || '';
+
+    const preview = document.getElementById('edit-img-preview');
+    const thumb = document.getElementById('edit-img-thumb');
+
+    if (image) {
+        thumb.src = image;
+        preview.style.display = 'flex';
+    } else {
+        preview.style.display = 'none';
+    }
+
+    document.getElementById('edit-modal').style.display = 'grid';
+}
+
+function addOrderItem() {
+    const list = document.getElementById('order-items-list');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 60px 80px 32px;gap:6px;align-items:center';
+
+    const sel = document.createElement('select');
+    sel.name = 'item_name[]';
+    sel.style.cssText = 'padding:8px;border-radius:8px;background:rgba(30,30,30,.9);border:1px solid var(--line);color:var(--text);font-size:12px';
+    sel.innerHTML = '<option value="">Produto...</option>' +
+        PRODUCTS_DATA.map(p => `<option value="${p.name}" data-price="${p.price}">${p.name}</option>`).join('');
+
+    const qty = document.createElement('input');
+    qty.type = 'number';
+    qty.name = 'item_qty[]';
+    qty.value = '1';
+    qty.min = '1';
+    qty.style.cssText = 'padding:8px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:12px;text-align:center';
+
+    const price = document.createElement('input');
+    price.type = 'number';
+    price.name = 'item_price[]';
+    price.step = '0.01';
+    price.placeholder = 'Preço';
+    price.style.cssText = 'padding:8px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text);font-size:12px';
+
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '×';
+    rm.style.cssText = 'padding:6px;border-radius:8px;background:rgba(239,68,68,.2);border:none;color:#f87171;cursor:pointer;font-size:16px';
+    rm.onclick = () => {
+        row.remove();
+        updateOrderTotal();
+    };
+
+    sel.addEventListener('change', () => {
+        const opt = sel.options[sel.selectedIndex];
+        price.value = opt.dataset.price || '';
+        updateOrderTotal();
+    });
+
+    qty.addEventListener('input', updateOrderTotal);
+    price.addEventListener('input', updateOrderTotal);
+
+    row.append(sel, qty, price, rm);
+    list.appendChild(row);
+}
+
+function updateOrderTotal() {
+    let total = 0;
+    document.querySelectorAll('#order-items-list > div').forEach(row => {
+        const q = parseFloat(row.querySelector('[name="item_qty[]"]').value || 0);
+        const pr = parseFloat(row.querySelector('[name="item_price[]"]').value || 0);
+        total += q * pr;
+    });
+
+    document.getElementById('order-total-display').textContent =
+        'R$ ' + total.toFixed(2).replace('.', ',');
+}
+
+function editBranch(id, name, city, status) {
+    document.getElementById('edit-branch-form').action = '/admin/branches/' + id + '/edit{% if selected_branch_id %}?branch_id={{ selected_branch_id }}{% endif %}';
+    document.getElementById('eb-name').value = name;
+    document.getElementById('eb-city').value = city;
+    document.getElementById('eb-status').value = status;
+    document.getElementById('edit-branch-modal').style.display = 'grid';
+}
+
+function toggleItems(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+document.querySelectorAll('.modal').forEach(m => {
+    m.addEventListener('click', e => {
+        if (e.target === m) m.style.display = 'none';
+    });
+});
+</script>
+
+{% endblock %}
